@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Регистрация</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white flex items-center justify-center h-screen p-6">
+    <form method="POST" class="bg-slate-800 p-8 rounded-3xl w-full max-w-sm shadow-2xl">
+        <h2 class="text-3xl font-black mb-6 text-center text-indigo-400">Регистрация</h2>
+        <input name="username" placeholder="Придумайте логин" class="w-full bg-slate-700 rounded-2xl px-5 py-3 mb-4 outline-none">
+        <input name="password" type="password" placeholder="Придумайте пароль" class="w-full bg-slate-700 rounded-2xl px-5 py-3 mb-6 outline-none">
+        <button class="w-full bg-indigo-600 py-3 rounded-2xl font-bold text-lg">Зарегистрироваться</button>
+        <p class="text-center mt-6 text-sm opacity-50">Уже есть аккаунт? <a href="/login" class="underline">Войти</a></p>
+    </form>
+</body>
+</html>

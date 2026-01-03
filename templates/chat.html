@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Messenger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .msg-bubble { max-width: 85%; word-wrap: break-word; }
+        .hidden-mobile { display: none; }
+        @media (min-width: 768px) { .hidden-mobile { display: flex; } }
+    </style>
+</head>
+<body class="bg-slate-900 text-white h-screen flex overflow-hidden">
+
+    <div id="side-panel" class="w-full md:w-80 flex flex-col border-r border-slate-700 bg-slate-800 h-full">
+        <div class="p-4 flex items-center justify-between border-b border-slate-700">
+            <a href="/profile" class="flex items-center space-x-3">
+                <img src="{{ current_user.avatar }}" class="w-10 h-10 rounded-full border-2 border-indigo-500 object-cover">
+                <span class="font-bold truncate w-24">{{ current_user.username }}</span>
+            </a>
+            <button onclick="requestNotif()" id="notif-btn" class="bg-indigo-600 p-2 rounded-lg text-xs">🔔 Пуш</button>
+        </div>
+        <div class="p-3">
+            <form action="/add_friend_by_nick" method="POST" class="flex space-x-2">
+                <input name="nickname" placeholder="Ник друга" class="flex-1 bg-slate-700 rounded-xl px-4 py-2 text-sm outline-none">
+                <button class="bg-indigo-600 px-4 rounded-xl font-bold">+</button>
+            </form>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            {% for f in friends %}
+            <div onclick="openChat({{ f.id }}, '{{ f.username }}')" class="p-4 border-b border-slate-700/50 flex items-center space-x-4 hover:bg-slate-700 cursor-pointer transition">
+                <img src="{{ f.avatar }}" class="w-12 h-12 rounded-full object-cover shadow-md">
+                <span class="font-bold">{{ f.username }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div id="main-chat" class="hidden md:flex flex-1 flex-col fixed md:relative inset-0 bg-slate-900 z-50 md:z-auto h-full">
+        <div class="p-4 bg-slate-800 flex items-center border-b border-slate-700 shadow-xl">
+            <button onclick="closeChat()" class="md:hidden mr-4 text-2xl">←</button>
+            <div id="chat-title" class="font-black text-indigo-400">Выберите диалог</div>
+        </div>
+        <div id="msg-box" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900"></div>
+        <div id="input-area" class="hidden p-4 bg-slate-800 flex items-center space-x-2 border-t border-slate-700">
+            <input type="file" id="file-input" class="hidden" onchange="sendPhoto()">
+            <button onclick="document.getElementById('file-input').click()" class="text-2xl px-2">📷</button>
+            <input id="msg-input" onkeypress="if(event.key==='Enter') sendText()" class="flex-1 bg-slate-700 rounded-2xl px-4 py-3 outline-none" placeholder="Сообщение...">
+            <button onclick="sendText()" class="bg-indigo-600 p-3 rounded-2xl font-bold">➤</button>
+        </div>
+    </div>
+
+    <script>
+        let currentChatId = null;
+        let lastCount = 0;
+        let isFirst = true;
+
+        function requestNotif() {
+            Notification.requestPermission().then(p => { if(p==='granted') document.getElementById('notif-btn').style.display='none'; });
+        }
+        if(Notification.permission === 'granted') document.getElementById('notif-btn').style.display='none';
+
+        function openChat(id, name) {
+            currentChatId = id; lastCount = 0; isFirst = true;
+            document.getElementById('side-panel').classList.add('hidden-mobile');
+            document.getElementById('main-chat').classList.remove('hidden');
+            document.getElementById('main-chat').classList.add('flex');
+            document.getElementById('chat-title').innerText = name;
+            document.getElementById('input-area').classList.remove('hidden');
+            document.getElementById('input-area').classList.add('flex');
+            update();
+        }
+
+        function closeChat() {
+            document.getElementById('main-chat').classList.add('hidden');
+            document.getElementById('side-panel').classList.remove('hidden-mobile');
+            currentChatId = null;
+        }
+
+        function update() {
+            if(!currentChatId) return;
+            fetch('/get_messages/' + currentChatId).then(r => r.json()).then(data => {
+                if(data.length > lastCount) {
+                    const box = document.getElementById('msg-box');
+                    if(isFirst) box.innerHTML = '';
+                    data.slice(lastCount).forEach(m => {
+                        const isMe = m.sender_id == {{ current_user.id }};
+                        if(!isMe && !isFirst && Notification.permission==='granted') new Notification("Messenger", {body: m.text || "Прислал фото"});
+                        const div = document.createElement('div');
+                        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
+                        div.innerHTML = `<div class="msg-bubble p-3 rounded-2xl shadow-lg ${isMe ? 'bg-indigo-600 rounded-tr-none' : 'bg-slate-700 rounded-tl-none'}">
+                            ${m.text ? `<p class="text-sm">${m.text}</p>` : ''}
+                            ${m.file_path ? `<img src="/${m.file_path}" class="rounded-lg mt-1 max-w-full">` : ''}
+                            <p class="text-[9px] opacity-40 text-right mt-1">${m.time}</p>
+                        </div>`;
+                        box.appendChild(div);
+                    });
+                    box.scrollTop = box.scrollHeight;
+                    lastCount = data.length; isFirst = false;
+                }
+            });
+        }
+
+        function sendText() {
+            const el = document.getElementById('msg-input');
+            if(!el.value.trim()) return;
+            fetch('/send_msg', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_id:currentChatId, message:el.value})});
+            el.value = '';
+        }
+
+        function sendPhoto() {
+            const fd = new FormData();
+            fd.append('photo', document.getElementById('file-input').files[0]);
+            fetch('/upload', {method:'POST', body:fd}).then(r => r.json()).then(res => {
+                fetch('/send_msg', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recipient_id:currentChatId, file_path:res.file_path})});
+            });
+        }
+        setInterval(update, 3000);
+    </script>
+</body>
+</html>
